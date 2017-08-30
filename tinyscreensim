@@ -1,0 +1,20 @@
+#!/bin/bash
+echo test
+myscriptpath=`dirname "$0"`
+myinopath=`dirname "$2"`
+echo $myscriptpath
+mytemp=`mktemp -d`
+echo $mytemp
+output=$1
+echo $output
+cppfile=$mytemp/$2.cpp
+echo $cppfile
+cp $2 $mytemp/$2.cpp
+echo copy
+shift 2
+echo shift
+g++ -o $output $cppfile $myscriptpath/src/Main.cpp "$@" -I$myscriptpath/include -I$myinopath -lGL -lglfw
+echo g++
+rm $cppfile
+echo rm
+rmdir $mytemp
