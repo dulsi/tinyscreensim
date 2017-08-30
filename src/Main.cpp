@@ -6,11 +6,14 @@
  */
 
 #include <GLFW/glfw3.h>
-#include <gl/GL.h>
+#include <GL/gl.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <TinyScreen.h>
+#include <SPI.h>
+#include <Wire.h>
 #include <stdio.h>
+#include <sys/time.h>
 
 #define TINYSCREEN_WIDTH 96
 #define TINYSCREEN_HEIGHT 64
@@ -25,6 +28,45 @@
 #define TinyArcadePinY 1
 #define TinyArcadePin1 45
 #define TinyArcadePin2 44
+
+SerialX Serial;
+TwoWire Wire;
+
+void delay(int msec)
+{
+    struct timespec val;
+    struct timespec rem;
+    val.tv_sec = msec / 1000;
+    val.tv_nsec = msec % 1000 * 1000000L;
+    rem.tv_sec = 0;
+    rem.tv_nsec = 0;
+    nanosleep(&val, &rem);
+}
+
+#include <boost/random/linear_congruential.hpp>
+#include <boost/random/uniform_int.hpp>
+#include <boost/random/uniform_real.hpp>
+#include <boost/random/variate_generator.hpp>
+
+typedef boost::minstd_rand base_generator_type;
+#include <ctime>
+
+static base_generator_type generator(42u);
+
+void randomSeed(int seed)
+{
+ generator.seed(static_cast<unsigned int>(std::time(0)));
+}
+
+int random(int min, int max)
+{
+ boost::uniform_int<> ran_dist(min, max - 1);
+ boost::variate_generator<base_generator_type&, boost::uniform_int<> > ran(generator, ran_dist);
+ return ran();
+/*    int x = random();
+    x = x % (max - min);
+    return x + min;*/
+}
 
 typedef struct {
     GLuint screenTexture;
@@ -51,6 +93,21 @@ static void updateScreen() {
     glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, SCREEN_TEXTURE_SIZE, SCREEN_TEXTURE_SIZE, 0,
                  GL_RGB, GL_UNSIGNED_BYTE, emulator.screenData);
 
+}
+
+void TwoWire::requestFrom(byte address, int quantity)
+{
+    GLFWwindow* window = emulator.window;
+    where = 0;
+    int RXY = 511;
+    data[0] = RXY >> 2;
+    data[1] = RXY >> 2;
+    int LX = (glfwGetKey(window, GLFW_KEY_RIGHT) ? -511 : 0) + (glfwGetKey(window, GLFW_KEY_LEFT) ? 511 : 0)+511;
+    data[2] = LX >> 2;
+    int LY = (glfwGetKey(window, GLFW_KEY_UP) ? 511 : 0) + (glfwGetKey(window, GLFW_KEY_DOWN) ? -511 : 0)+511;
+    data[3] = LY >> 2;
+    data[4] = ((((((LX & 3) << 2) | (LY & 3)) << 2) | (RXY & 3)) << 2) | (RXY & 3);
+    data[5] = (glfwGetKey(window, GLFW_KEY_G) ? 0 : 4) | (glfwGetKey(window, GLFW_KEY_H) ? 0 : 8);
 }
 
 int digitalRead(int pin) {
@@ -297,11 +354,11 @@ void TinyScreen::endTransfer(void) {
         int bl = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
         return tl << 1 | bl | tr << 2 | br << 3;
     }
-    /*void TinyScreen::writeGPIO(uint8_t, uint8_t);
+    /*void TinyScreen::writeGPIO(uint8_t, uint8_t);*/
     //font
-    void TinyScreen::setFont(const FONT_INFO&);
-    void TinyScreen::setCursor(uint8_t, uint8_t);
-    void TinyScreen::fontColor(uint8_t, uint8_t); */
+    void TinyScreen::setFont(const FONT_INFO&) {}
+    void TinyScreen::setCursor(uint8_t, uint8_t) {}
+    void TinyScreen::fontColor(uint8_t, uint8_t) {}
     size_t TinyScreen::write(uint8_t) { return 0; }
 
 
@@ -322,7 +379,9 @@ static void init() {
 }
 
 unsigned long millis() {
-    return clock();
+    struct timeval ret;
+    gettimeofday(&ret, NULL);
+    return ret.tv_sec * 1000 + ret.tv_usec / 1000;
 }
 
 static void error_callback(int /*error*/, const char* description)

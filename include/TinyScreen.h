@@ -25,15 +25,17 @@ typedef struct
 
 } FONT_CHAR_INFO;
 
-typedef struct
+struct FONT_INFO
 {
+    FONT_INFO() : height(0), startCh(0), endCh(0), charDesc(0), bitmap(0) {}
+
 	const unsigned char height;
 	const char startCh;
 	const char endCh;
 	const FONT_CHAR_INFO*	charDesc;
 	const unsigned char* bitmap;
 
-} FONT_INFO;
+};
 
 class TinyScreen {
 public:
@@ -71,6 +73,8 @@ public:
     void setCursor(uint8_t, uint8_t);
     void fontColor(uint8_t, uint8_t);
     virtual size_t write(uint8_t);
+    void print(const char *s) {}
+    void print(int n) {}
 
     static const uint8_t xMax=95;
     static const uint8_t yMax=63;
@@ -80,5 +84,7 @@ public:
     const FONT_CHAR_INFO* _fontDescriptor;
     const unsigned char* _fontBitmap;
 };
+
+const FONT_INFO liberationSans_8ptFontInfo;
 
 #endif // __TINYSCREEN_H__
