@@ -1,11 +1,14 @@
 #!/bin/bash
 myscriptpath=`dirname "$0"`
+if [ -d "/usr/share/tinyscreensim" ]; then
+ myscriptpath="/usr/share/tinyscreensim"
+fi
 myinopath=`dirname "$2"`
 mytemp=`mktemp -d`
 output=$1
 cppfile=$mytemp/$2.cpp
 cp $2 $mytemp/$2.cpp
 shift 2
-g++ -o $output $cppfile $myscriptpath/src/Main.cpp "$@" -I$myscriptpath/include -I$myinopath -lGL -lglfw
+g++ -o $output -DTINYSCREENSIM=1 $cppfile $myscriptpath/src/Main.cpp "$@" -I$myscriptpath/include -I$myinopath -lGL -lglfw
 rm $cppfile
 rmdir $mytemp
