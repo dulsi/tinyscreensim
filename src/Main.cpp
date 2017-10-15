@@ -149,6 +149,52 @@ static void drawCircle(float x, float y, float radius, int div) {
     glEnd();
 }
 
+static void drawG(float x, float y, float size) {
+    glBegin(GL_QUADS);
+    glVertex2f(x, y + size);
+    glVertex2f(x + size, y + size);
+    glVertex2f(x + size, y + size - size/8);
+    glVertex2f(x, y + size - size/8);
+    glVertex2f(x + size - size/8, y + size);
+    glVertex2f(x + size, y + size);
+    glVertex2f(x + size, y + size - size/4);
+    glVertex2f(x + size - size/8, y + size - size/4);
+    glVertex2f(x, y);
+    glVertex2f(x, y + size);
+    glVertex2f(x + size/8, y + size);
+    glVertex2f(x + size/8, y);
+    glVertex2f(x, y);
+    glVertex2f(x + size, y);
+    glVertex2f(x + size, y + size/8);
+    glVertex2f(x, y + size/8);
+    glVertex2f(x + size, y);
+    glVertex2f(x + size, y + size/2 + size/16);
+    glVertex2f(x + size - size/8, y + size/2 + size/16);
+    glVertex2f(x + size - size/8, y);
+    glVertex2f(x + size/2, y + size/2 + size/16);
+    glVertex2f(x + size/2, y + size/2 - size/16);
+    glVertex2f(x + size, y + size/2 - size/16);
+    glVertex2f(x + size, y + size/2 + size/16);
+    glEnd();
+}
+
+static void drawH(float x, float y, float size) {
+    glBegin(GL_QUADS);
+    glVertex2f(x, y);
+    glVertex2f(x, y + size);
+    glVertex2f(x + size/8, y + size);
+    glVertex2f(x + size/8, y);
+    glVertex2f(x + size, y);
+    glVertex2f(x + size, y + size);
+    glVertex2f(x + size - size/8, y + size);
+    glVertex2f(x + size - size/8, y);
+    glVertex2f(x + size/8, y + size/2 + size/16);
+    glVertex2f(x + size - size/8, y + size/2 + size/16);
+    glVertex2f(x + size - size/8, y + size/2 - size/16);
+    glVertex2f(x + size/8, y + size/2 - size/16);
+    glEnd();
+}
+
 void TinyScreen::startData(void) {}
 void TinyScreen::startCommand(void) {}
 void TinyScreen::endTransfer(void) {
@@ -197,8 +243,14 @@ void TinyScreen::endTransfer(void) {
     glColor3f(.8f,.2f,0.f);
     float buttonY = !digitalRead(4) ? -.32f : -.3f;
     drawCircle(.6f,buttonY,.075f,12);
+    glColor3f(.0f,.0f,0.f);
+    drawG(.6f - .0375f, buttonY - .0375f, .075f);
+    glColor3f(.8f,.2f,0.f);
     buttonY = !digitalRead(5) ? -.22f : -.2f;
     drawCircle(.8f,buttonY,.075f,12);
+    glColor3f(.0f,.0f,0.f);
+    drawH(.8f - .0375f, buttonY - .0375f, .075f);
+    glColor3f(.8f,.2f,0.f);
     int buttons = getButtons();
     glBegin(GL_QUADS);
     // bottom left
