@@ -330,7 +330,7 @@ void TinyScreen::endTransfer(void) {
     void TinyScreen::setFlip(uint8_t) {}
     void TinyScreen::setMirror(uint8_t) {}
     void TinyScreen::setBitDepth(uint8_t is16bit) {
-        emulator.is16bit = is16bit ? true : false;
+        emulator.is16bit = (is16bit & TSBitDepth16) ? true : false;
     }
     void TinyScreen::setBrightness(uint8_t) {}
     //void TinyScreen::writeRemap(void) {}

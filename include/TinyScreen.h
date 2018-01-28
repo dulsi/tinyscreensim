@@ -17,6 +17,9 @@ const uint8_t TinyScreenAlternate = 2;
 const uint8_t TinyScreenPlus      = 3;
 const uint8_t TinyScreenGamepad   = 4;
 
+// TinyScreen bitDepths
+const uint8_t TSBitDepth8  = 0;
+const uint8_t TSBitDepth16 = 1;
 
 typedef struct
 {
