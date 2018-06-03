@@ -121,6 +121,7 @@ int digitalRead(int pin) {
 }
 
 int analogWrite(int pin, int val) {
+ return 0;
 }
 
 int analogRead(int pin) {
