@@ -9,6 +9,6 @@ output=$1
 cppfile=$mytemp/$2.cpp
 cp $2 $mytemp/$2.cpp
 shift 2
-g++ -o $output -DTINYSCREENSIM=1 $cppfile $myscriptpath/src/Main.cpp "$@" -I$myscriptpath/include -I$myinopath -lGL -lglfw
+g++ -o $output -DTINYSCREENSIM=1 $cppfile $myscriptpath/src/Main.cpp $myscriptpath/src/SdFat.cpp "$@" -I$myscriptpath/include -I$myinopath -lGL -lglfw -lboost_filesystem -lboost_system
 rm $cppfile
 rmdir $mytemp
