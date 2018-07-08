@@ -15,6 +15,13 @@
 #include <stdio.h>
 #include <sys/time.h>
 
+#ifdef PNGSAVE
+#define png_infopp_NULL (png_infopp)NULL
+#define int_p_NULL (int*)NULL
+#include <boost/gil/gil_all.hpp>
+#include <boost/gil/extension/io/png_dynamic_io.hpp>
+#endif
+
 #define TINYSCREEN_WIDTH 96
 #define TINYSCREEN_HEIGHT 64
 
@@ -465,7 +472,23 @@ static void key_callback(GLFWwindow* window, int key, int /*scancode*/, int acti
             }
         }
     }
+#ifdef PNGSAVE
+    if (key == GLFW_KEY_P && action == GLFW_RELEASE) {
+        boost::gil::rgb8_image_t img(TINYSCREEN_WIDTH, TINYSCREEN_HEIGHT);
+        for (int y = 0; y < TINYSCREEN_HEIGHT; y++)
+        {
+            for (int x = 0; x < TINYSCREEN_WIDTH; x++)
+            {
+                int indx = (x + y * SCREEN_TEXTURE_SIZE) * 3;
+                boost::gil::rgb8_pixel_t p(emulator.screenData[indx], emulator.screenData[indx + 1], emulator.screenData[indx + 2]);
+                *(view(img).at(x, y)) = p;
+            }
+        }
+        boost::gil::png_write_view("screenshot.png", const_view(img));
+    }
+#endif
 }
+
 int main(void)
 {
     GLFWwindow* window;

@@ -5,10 +5,17 @@ if [ -d "/usr/share/tinyscreensim" ]; then
 fi
 myinopath=`dirname "$2"`
 mytemp=`mktemp -d`
+ADDDEFINE=""
+ADDLIB=""
+if [ $1 == --png ]; then
+ ADDDEFINE="-DPNGSAVE=1"
+ ADDLIB="-lpng"
+ shift 1
+fi
 output=$1
 cppfile=$mytemp/$2.cpp
 cp $2 $mytemp/$2.cpp
 shift 2
-g++ -o $output -DTINYSCREENSIM=1 $cppfile $myscriptpath/src/Main.cpp $myscriptpath/src/SdFat.cpp "$@" -I$myscriptpath/include -I$myinopath -lGL -lglfw -lboost_filesystem -lboost_system
+g++ -g -o $output -DTINYSCREENSIM=1 $ADDDEFINE $cppfile $myscriptpath/src/Main.cpp $myscriptpath/src/SdFat.cpp "$@" -I$myscriptpath/include -I$myinopath -lGL -lglfw -lboost_filesystem -lboost_system $ADDLIB
 rm $cppfile
 rmdir $mytemp
