@@ -341,6 +341,10 @@ void TinyScreen::endTransfer(void) {
         emulator.is16bit = (is16bit & TSBitDepth16) ? true : false;
     }
     void TinyScreen::setBrightness(uint8_t) {}
+    void TinyScreen::setWindowTitle(const char *title)
+    {
+        glfwSetWindowTitle(emulator.window, title);
+    }
     //void TinyScreen::writeRemap(void) {}
     //accelerated drawing commands
     void TinyScreen::drawPixel(uint8_t, uint8_t, uint16_t) {}

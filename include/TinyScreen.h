@@ -54,6 +54,7 @@ public:
     void setMirror(uint8_t);
     void setBitDepth(uint8_t);
     void setBrightness(uint8_t);
+    void setWindowTitle(const char *title);
     void writeRemap(void);
     //accelerated drawing commands
     void drawPixel(uint8_t, uint8_t, uint16_t);
