@@ -52,7 +52,7 @@
 SerialX Serial;
 TwoWire Wire;
 #ifdef SDL2LIB
-unsigned int controls;
+unsigned int controls = 0;
 #endif
 
 void delay(int msec)
