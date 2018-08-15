@@ -7,15 +7,24 @@ myinopath=`dirname "$2"`
 mytemp=`mktemp -d`
 ADDDEFINE=""
 ADDLIB=""
+GRFLAGS=""
+GRLIBS="-lGL -lglfw"
 if [ $1 == --png ]; then
- ADDDEFINE="-DPNGSAVE=1"
- ADDLIB="-lpng"
+ ADDDEFINE="$ADDDEFINE -DPNGSAVE=1"
+ ADDLIB="$ADDLIB -lpng"
+ shift 1
+fi
+if [ $1 == --sdl2 ]; then
+ ADDDEFINE="$ADDDEFINE -DSDL2LIB=1"
+ ADDLIB="$ADDLIB -lpng"
+ GRFLAGS=`pkg-config --cflags sdl2`
+ GRLIBS=`pkg-config --libs sdl2`
  shift 1
 fi
 output=$1
 cppfile=$mytemp/$2.cpp
 cp $2 $mytemp/$2.cpp
 shift 2
-g++ -g -o $output -DTINYSCREENSIM=1 $ADDDEFINE $cppfile $myscriptpath/src/Main.cpp $myscriptpath/src/SdFat.cpp "$@" -I$myscriptpath/include -I$myinopath -lGL -lglfw -lboost_filesystem -lboost_system $ADDLIB
+g++ -g -o $output -DTINYSCREENSIM=1 $ADDDEFINE $GRFLAGS $cppfile $myscriptpath/src/Main.cpp $myscriptpath/src/SdFat.cpp "$@" -I$myscriptpath/include -I$myinopath $GRLIBS -lboost_filesystem -lboost_system $ADDLIB
 rm $cppfile
 rmdir $mytemp

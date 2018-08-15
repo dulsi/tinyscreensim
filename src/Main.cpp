@@ -5,8 +5,12 @@
  * runs on the TinyScreen+ in a similar way.
  */
 
+#ifdef SDL2LIB
+#include <SDL.h>
+#else
 #include <GLFW/glfw3.h>
 #include <GL/gl.h>
+#endif
 #include <stdlib.h>
 #include <stdio.h>
 #include <TinyScreen.h>
@@ -30,6 +34,15 @@
 #define SCREEN_UMAX (96.0f / (float)SCREEN_TEXTURE_SIZE)
 #define SCREEN_VMAX (64.0f / (float)SCREEN_TEXTURE_SIZE)
 
+#define SCREEN_Y 64
+#define SCREEN_X 96
+
+#define KEYBIT_UP 0x01
+#define KEYBIT_DOWN 0x02
+#define KEYBIT_LEFT 0x04
+#define KEYBIT_RIGHT 0x08
+#define KEYBIT_BUTTON1 0x10
+#define KEYBIT_BUTTON2 0x20
 
 #define TinyArcadePinX 42
 #define TinyArcadePinY 1
@@ -38,6 +51,9 @@
 
 SerialX Serial;
 TwoWire Wire;
+#ifdef SDL2LIB
+unsigned int controls;
+#endif
 
 void delay(int msec)
 {
@@ -76,13 +92,21 @@ int random(int min, int max)
 }
 
 typedef struct {
-    GLuint screenTexture;
     unsigned char screenData[SCREEN_TEXTURE_SIZE*SCREEN_TEXTURE_SIZE * 3];
     unsigned char rawFrameBuffer[TINYSCREEN_WIDTH * TINYSCREEN_HEIGHT * 2];
     unsigned char x,y;
     bool is16bit;
     bool isRecordingTSV;
+#ifdef SDL2LIB
+    SDL_Window *window;
+    SDL_Renderer *mainRenderer;
+    SDL_Texture *mainTexture;
+    SDL_Surface *mainScreen;
+    int mult;
+#else
+    GLuint screenTexture;
     GLFWwindow* window;
+#endif
     FILE *tsvFP;
 } Emulator;
 
@@ -96,14 +120,32 @@ static void writeFrameBufferToTSV() {
 }
 
 static void updateScreen() {
+#ifdef SDL2LIB
+    SDL_UpdateTexture(emulator.mainTexture, NULL, emulator.mainScreen->pixels, emulator.mainScreen->pitch);
+    SDL_RenderClear(emulator.mainRenderer);
+    SDL_RenderCopy(emulator.mainRenderer, emulator.mainTexture, NULL, NULL);
+    SDL_RenderPresent(emulator.mainRenderer);
+#else
     glBindTexture(GL_TEXTURE_2D, emulator.screenTexture);
     glTexImage2D(GL_TEXTURE_2D, 0,GL_RGB, SCREEN_TEXTURE_SIZE, SCREEN_TEXTURE_SIZE, 0,
                  GL_RGB, GL_UNSIGNED_BYTE, emulator.screenData);
-
+#endif
 }
 
 void TwoWire::requestFrom(byte address, int quantity)
 {
+#ifdef SDL2LIB
+    where = 0;
+    int RXY = 511;
+    data[0] = RXY >> 2;
+    data[1] = RXY >> 2;
+    int LX = ((controls & KEYBIT_RIGHT) ? -511 : 0) + ((controls & KEYBIT_LEFT) ? 511 : 0)+511;
+    data[2] = LX >> 2;
+    int LY = ((controls & KEYBIT_UP) ? 511 : 0) + ((controls & KEYBIT_DOWN) ? -511 : 0)+511;
+    data[3] = LY >> 2;
+    data[4] = ((((((LX & 3) << 2) | (LY & 3)) << 2) | (RXY & 3)) << 2) | (RXY & 3);
+    data[5] = ((controls & KEYBIT_BUTTON1) ? 0 : 4) | ((controls & KEYBIT_BUTTON2) ? 0 : 8);
+#else
     GLFWwindow* window = emulator.window;
     where = 0;
     int RXY = 511;
@@ -115,15 +157,18 @@ void TwoWire::requestFrom(byte address, int quantity)
     data[3] = LY >> 2;
     data[4] = ((((((LX & 3) << 2) | (LY & 3)) << 2) | (RXY & 3)) << 2) | (RXY & 3);
     data[5] = (glfwGetKey(window, GLFW_KEY_G) ? 0 : 4) | (glfwGetKey(window, GLFW_KEY_H) ? 0 : 8);
+#endif
 }
 
 int digitalRead(int pin) {
+#ifndef SDL2LIB
     GLFWwindow* window = emulator.window;
     switch (pin) {
         case 4: case TinyArcadePin1: return (glfwGetKey(window, GLFW_KEY_G) ? 0 : 1);
         case 5: case TinyArcadePin2: return (glfwGetKey(window, GLFW_KEY_H) ? 0 : 1);
         default: return 0;
     }
+#endif
     return 0;
 }
 
@@ -132,12 +177,14 @@ int analogWrite(int pin, int val) {
 }
 
 int analogRead(int pin) {
+ #ifndef SDL2LIB
     GLFWwindow* window = emulator.window;
     switch (pin) {
         case 2: case TinyArcadePinX: return (glfwGetKey(window, GLFW_KEY_RIGHT) ? -511 : 0) + (glfwGetKey(window, GLFW_KEY_LEFT) ? 511 : 0)+511;
         case 3: case TinyArcadePinY: return (glfwGetKey(window, GLFW_KEY_UP) ? -511 : 0) + (glfwGetKey(window, GLFW_KEY_DOWN) ? 511 : 0)+511;
         default: return 0;
     }
+#endif
     return 0;
 }
 
@@ -145,6 +192,7 @@ void setup();
 
 void loop();
 
+#ifndef SDL2LIB
 static void drawCircle(float x, float y, float radius, int div) {
     glBegin(GL_TRIANGLE_FAN);
     glVertex2f(x, y);
@@ -202,12 +250,21 @@ static void drawH(float x, float y, float size) {
     glVertex2f(x + size/8, y + size/2 - size/16);
     glEnd();
 }
+#endif
 
-void TinyScreen::startData(void) {}
+void TinyScreen::startData(void) {
+#ifdef SDL2LIB
+    SDL_LockSurface(emulator.mainScreen);
+#endif
+}
 void TinyScreen::startCommand(void) {}
 void TinyScreen::endTransfer(void) {
-    GLFWwindow* window = emulator.window;
+#ifdef SDL2LIB
+    SDL_UnlockSurface(emulator.mainScreen);
+#endif
     updateScreen();
+#ifndef SDL2LIB
+    GLFWwindow* window = emulator.window;
     float ratio;
     int width, height;
     glfwGetFramebufferSize(window, &width, &height);
@@ -330,105 +387,129 @@ void TinyScreen::endTransfer(void) {
         glfwTerminate();
         exit(EXIT_SUCCESS);
     }
+#endif
 }
-    void TinyScreen::begin(void) {}
-    void TinyScreen::begin(uint8_t) {}
-    void TinyScreen::on(void) {}
-    void TinyScreen::off(void) {}
-    void TinyScreen::setFlip(uint8_t) {}
-    void TinyScreen::setMirror(uint8_t) {}
-    void TinyScreen::setBitDepth(uint8_t is16bit) {
-        emulator.is16bit = (is16bit & TSBitDepth16) ? true : false;
+void TinyScreen::begin(void) {}
+void TinyScreen::begin(uint8_t) {}
+void TinyScreen::on(void) {}
+void TinyScreen::off(void) {}
+void TinyScreen::setFlip(uint8_t) {}
+void TinyScreen::setMirror(uint8_t) {}
+void TinyScreen::setBitDepth(uint8_t is16bit) {
+    emulator.is16bit = (is16bit & TSBitDepth16) ? true : false;
+}
+void TinyScreen::setBrightness(uint8_t) {}
+void TinyScreen::setWindowTitle(const char *title)
+{
+#ifndef SDL2LIB
+    glfwSetWindowTitle(emulator.window, title);
+#endif
+}
+//void TinyScreen::writeRemap(void) {}
+//accelerated drawing commands
+void TinyScreen::drawPixel(uint8_t, uint8_t, uint16_t) {}
+void TinyScreen::drawLine(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) {}
+void TinyScreen::drawLine(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) {}
+void TinyScreen::drawRect(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) {}
+void TinyScreen::drawRect(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) {}
+void TinyScreen::clearWindow(uint8_t, uint8_t, uint8_t, uint8_t) {}
+//basic graphics commands
+void TinyScreen::writePixel(uint16_t) {
+}
+void TinyScreen::writeBuffer(uint8_t *rgb, int num) {
+    if (num > TINYSCREEN_WIDTH * (emulator.is16bit ? 2 : 1)) {
+        printf("line too long: %d\n",num);
     }
-    void TinyScreen::setBrightness(uint8_t) {}
-    void TinyScreen::setWindowTitle(const char *title)
-    {
-        glfwSetWindowTitle(emulator.window, title);
-    }
-    //void TinyScreen::writeRemap(void) {}
-    //accelerated drawing commands
-    void TinyScreen::drawPixel(uint8_t, uint8_t, uint16_t) {}
-    void TinyScreen::drawLine(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) {}
-    void TinyScreen::drawLine(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) {}
-    void TinyScreen::drawRect(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) {}
-    void TinyScreen::drawRect(uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t, uint8_t) {}
-    void TinyScreen::clearWindow(uint8_t, uint8_t, uint8_t, uint8_t) {}
-    //basic graphics commands
-    void TinyScreen::writePixel(uint16_t) {
-    }
-    void TinyScreen::writeBuffer(uint8_t *rgb, int num) {
-        if (num > TINYSCREEN_WIDTH * (emulator.is16bit ? 2 : 1)) {
-            printf("line too long: %d\n",num);
-        }
-        //uint16_t *rgb565_16 = (uint16_t*)&rgb565[0];
-        int idx = emulator.x + emulator.y * SCREEN_TEXTURE_SIZE;
-        int bufferIdx = (emulator.x + emulator.y * TINYSCREEN_WIDTH) * 2;
-        uint8_t *rgb565 = rgb;
-        for (int i=0;i<num; i+=1) {
-            uint8_t r,g,b;
-            if (emulator.is16bit) {
-                uint16_t word = 0;
-                word = rgb565[i]<<8 | rgb565[i+1];
-                r = word & 31;
-                g = (word >> 5) & 63;
-                b = word >> 11;
+    //uint16_t *rgb565_16 = (uint16_t*)&rgb565[0];
+    int idx = emulator.x + emulator.y * SCREEN_TEXTURE_SIZE;
+    int bufferIdx = (emulator.x + emulator.y * TINYSCREEN_WIDTH) * 2;
+#ifdef SDL2LIB
+    Uint8 *pixels = (Uint8*)emulator.mainScreen->pixels;
+#endif
+    uint8_t *rgb565 = rgb;
+    for (int i=0;i<num; i+=1) {
+        uint8_t r,g,b;
+        if (emulator.is16bit) {
+            uint16_t word = 0;
+            word = rgb565[i]<<8 | rgb565[i+1];
+            r = word & 31;
+            g = (word >> 5) & 63;
+            b = word >> 11;
 
-                r = (r << 3 | r >> 2);
-                g = (g << 2 | g >> 4);
-                b = (b << 3 | b >> 2);
-                emulator.rawFrameBuffer[bufferIdx++ % sizeof(emulator.rawFrameBuffer)] = rgb565[i];
-                emulator.rawFrameBuffer[bufferIdx++ % sizeof(emulator.rawFrameBuffer)] = rgb565[i+1];
-                i+=1;
-            } else {
-                uint8_t rgb233 = rgb[i];
-                r = rgb233 & 3;
-                r = (r << 6) | (r << 4) | (r << 2) | r;
-                g = (rgb233 >> 2) & 7;
-                g = g << 5 | g << 2 | g >> 1;
-                b = rgb233 >> 5 & 7;
-                b = b << 5 | b << 2 | b >> 1;
-                uint16_t word = 0;
-                word |= (((uint16_t)r) & 0x00F8) >> 3;
-                word |= (((uint16_t)g) & 0x00FC) << 2;
-                word |= (((uint16_t)b) & 0x00F8) << 8;
-                emulator.rawFrameBuffer[bufferIdx++ % sizeof(emulator.rawFrameBuffer)] = word >> 8;
-                emulator.rawFrameBuffer[bufferIdx++ % sizeof(emulator.rawFrameBuffer)] = word & 0x00FF;
-            }
-            // my gif screencsat program doesn't like 00ff00
-            if (r == 0 && g >= 250 && b == 0) g = 250;
-            emulator.screenData[idx*3+0] = r;
-            emulator.screenData[idx*3+1] = g;
-            emulator.screenData[idx*3+2] = b;
-            if (idx % SCREEN_TEXTURE_SIZE == TINYSCREEN_WIDTH-1) {
-                idx = emulator.x + (++emulator.y) * SCREEN_TEXTURE_SIZE;//SCREEN_TEXTURE_SIZE - TINYSCREEN_WIDTH + 1;
-            } else {
-                idx += 1;
-            }
+            r = (r << 3 | r >> 2);
+            g = (g << 2 | g >> 4);
+            b = (b << 3 | b >> 2);
+            emulator.rawFrameBuffer[bufferIdx++ % sizeof(emulator.rawFrameBuffer)] = rgb565[i];
+            emulator.rawFrameBuffer[bufferIdx++ % sizeof(emulator.rawFrameBuffer)] = rgb565[i+1];
+            i+=1;
+        } else {
+            uint8_t rgb233 = rgb[i];
+            r = rgb233 & 3;
+            r = (r << 6) | (r << 4) | (r << 2) | r;
+            g = (rgb233 >> 2) & 7;
+            g = g << 5 | g << 2 | g >> 1;
+            b = rgb233 >> 5 & 7;
+            b = b << 5 | b << 2 | b >> 1;
+            uint16_t word = 0;
+            word |= (((uint16_t)r) & 0x00F8) >> 3;
+            word |= (((uint16_t)g) & 0x00FC) << 2;
+            word |= (((uint16_t)b) & 0x00F8) << 8;
+            emulator.rawFrameBuffer[bufferIdx++ % sizeof(emulator.rawFrameBuffer)] = word >> 8;
+            emulator.rawFrameBuffer[bufferIdx++ % sizeof(emulator.rawFrameBuffer)] = word & 0x00FF;
         }
-        //emulator.y+=1;
+        // my gif screencsat program doesn't like 00ff00
+        if (r == 0 && g >= 250 && b == 0) g = 250;
+        emulator.screenData[idx*3+0] = r;
+        emulator.screenData[idx*3+1] = g;
+        emulator.screenData[idx*3+2] = b;
+#ifdef SDL2LIB
+        int startIdx = ((emulator.x + ((i / (emulator.is16bit ? 2 : 1)) % TINYSCREEN_WIDTH) + emulator.y * TINYSCREEN_WIDTH * emulator.mult) * emulator.mult) * 4;
+        for (int yMod = 0; yMod < emulator.mult; yMod++)
+        {
+         for (int xMod = 0; xMod < emulator.mult; xMod++)
+         {
+          pixels[startIdx + xMod * 4] = b;
+          pixels[startIdx + xMod * 4 + 1] = g;
+          pixels[startIdx + xMod * 4 + 2] = r;
+          pixels[startIdx + xMod * 4 + 3] = 255;
+         }
+         startIdx += TINYSCREEN_WIDTH * emulator.mult * 4;
+        }
+#endif
+        if (idx % SCREEN_TEXTURE_SIZE == TINYSCREEN_WIDTH-1) {
+            idx = emulator.x + (++emulator.y) * SCREEN_TEXTURE_SIZE;//SCREEN_TEXTURE_SIZE - TINYSCREEN_WIDTH + 1;
+        } else {
+            idx += 1;
+        }
     }
-    /*void TinyScreen::setX(uint8_t, uint8_t);
-    void TinyScreen::setY(uint8_t, uint8_t);*/
-    void TinyScreen::goTo(uint8_t x, uint8_t y) {
-        emulator.x = x;
-        emulator.y = y;
-    }
+    //emulator.y+=1;
+}
+/*void TinyScreen::setX(uint8_t, uint8_t);
+void TinyScreen::setY(uint8_t, uint8_t);*/
+void TinyScreen::goTo(uint8_t x, uint8_t y) {
+    emulator.x = x;
+    emulator.y = y;
+}
 
-    //I2C GPIO related
-    uint8_t TinyScreen::getButtons(void) {
-        GLFWwindow* window = emulator.window;
-        int tr = (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS);
-        int br = (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS);
-        int tl = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
-        int bl = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
-        return tl << 1 | bl | tr << 2 | br << 3;
-    }
-    /*void TinyScreen::writeGPIO(uint8_t, uint8_t);*/
-    //font
-    void TinyScreen::setFont(const FONT_INFO&) {}
-    void TinyScreen::setCursor(uint8_t, uint8_t) {}
-    void TinyScreen::fontColor(uint8_t, uint8_t) {}
-    size_t TinyScreen::write(uint8_t) { return 0; }
+//I2C GPIO related
+uint8_t TinyScreen::getButtons(void) {
+#ifdef SDL2LIB
+    return 0;
+#else
+    GLFWwindow* window = emulator.window;
+    int tr = (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS);
+    int br = (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS);
+    int tl = (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS);
+    int bl = (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS);
+    return tl << 1 | bl | tr << 2 | br << 3;
+#endif
+}
+/*void TinyScreen::writeGPIO(uint8_t, uint8_t);*/
+//font
+void TinyScreen::setFont(const FONT_INFO&) {}
+void TinyScreen::setCursor(uint8_t, uint8_t) {}
+void TinyScreen::fontColor(uint8_t, uint8_t) {}
+size_t TinyScreen::write(uint8_t) { return 0; }
 
 
 static void init() {
@@ -441,10 +522,14 @@ static void init() {
         }
     }
 
+#ifndef SDL2LIB
     glGenTextures(1, &emulator.screenTexture);
+#endif
     updateScreen();
+#ifndef SDL2LIB
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
     glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
+#endif
 }
 
 unsigned long millis() {
@@ -457,6 +542,8 @@ static void error_callback(int /*error*/, const char* description)
 {
     fputs(description, stderr);
 }
+
+#ifndef SDL2LIB
 static void key_callback(GLFWwindow* window, int key, int /*scancode*/, int action, int /*mods*/)
 {
     if (key == GLFW_KEY_ESCAPE && action == GLFW_PRESS)
@@ -492,9 +579,58 @@ static void key_callback(GLFWwindow* window, int key, int /*scancode*/, int acti
     }
 #endif
 }
+#endif
 
 int main(void)
 {
+#ifdef SDL2LIB
+    emulator.mult = 4;
+    if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0)
+    {
+        printf("Failed - SDL_Init\n");
+        exit(0);
+    }
+    SDL_Window* window;
+    window = SDL_CreateWindow("TinyScreen Simulator",
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SDL_WINDOWPOS_UNDEFINED,
+                              SCREEN_X * emulator.mult,
+                              SCREEN_Y * emulator.mult,
+                              /*(fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : */0/*)*/);
+    emulator.window = window;
+    if (window == NULL)
+    {
+        printf("Failed - SDL_CreateWindow\n");
+        exit(0);
+    }
+
+    emulator.mainRenderer = SDL_CreateRenderer(emulator.window, -1, /*(softRenderer ? SDL_RENDERER_SOFTWARE : */0/*)*/);
+    if (emulator.mainRenderer == NULL)
+    {
+        printf("Failed - SDL_CreateRenderer\n");
+        exit(0);
+    }
+    emulator.mainTexture = SDL_CreateTexture(emulator.mainRenderer,
+                                SDL_PIXELFORMAT_ARGB8888,
+                                SDL_TEXTUREACCESS_STREAMING,
+                                SCREEN_X * emulator.mult,
+                                SCREEN_Y * emulator.mult);
+    if (emulator.mainTexture == NULL)
+    {
+        printf("Failed - SDL_CreateTexture\n");
+        exit(0);
+    }
+    emulator.mainScreen = SDL_CreateRGBSurface(0, SCREEN_X * emulator.mult, SCREEN_Y * emulator.mult, 32,
+                                           0x00FF0000,
+                                           0x0000FF00,
+                                           0x000000FF,
+                                           0xFF000000);
+    if (emulator.mainScreen == NULL)
+    {
+        printf("Failed - SDL_CreateRGBSurface\n");
+        exit(0);
+    }
+#else
     GLFWwindow* window;
     glfwSetErrorCallback(error_callback);
     if (!glfwInit())
@@ -509,13 +645,88 @@ int main(void)
     glfwMakeContextCurrent(window);
     glfwSwapInterval(1);
     glfwSetKeyCallback(window, key_callback);
+#endif
     init();
     setup();
     int frame = 0;
+#ifdef SDL2LIB
+    while (true)
+#else
     while (!glfwWindowShouldClose(window))
+#endif
     {
         loop();
         frame++;
+#ifdef SDL2LIB
+        SDL_Event sdlevent;
+        while (SDL_PollEvent(&sdlevent))
+        {
+            if (sdlevent.type == SDL_QUIT)
+            {
+                SDL_Quit();
+                exit(EXIT_SUCCESS);
+            }
+            else if (sdlevent.type == SDL_KEYDOWN)
+            {
+                if ((sdlevent.key.keysym.sym == SDLK_UP) || (sdlevent.key.keysym.sym == SDLK_KP_8))
+                {
+                    controls |= KEYBIT_UP;
+                }
+                else if ((sdlevent.key.keysym.sym == SDLK_LEFT) || (sdlevent.key.keysym.sym == SDLK_KP_4))
+                {
+                    controls |= KEYBIT_LEFT;
+                }
+                else if ((sdlevent.key.keysym.sym == SDLK_DOWN) || (sdlevent.key.keysym.sym == SDLK_KP_2))
+                {
+                    controls |= KEYBIT_DOWN;
+                }
+                else if ((sdlevent.key.keysym.sym == SDLK_RIGHT) || (sdlevent.key.keysym.sym == SDLK_KP_6))
+                {
+                    controls |= KEYBIT_RIGHT;
+                }
+                else if (sdlevent.key.keysym.sym == SDLK_g)
+                {
+                    controls |= KEYBIT_BUTTON1;
+                }
+                else if (sdlevent.key.keysym.sym == SDLK_h)
+                {
+                    controls |= KEYBIT_BUTTON2;
+                }
+                else if (sdlevent.key.keysym.sym == SDLK_ESCAPE)
+                {
+                    SDL_Quit();
+                    exit(EXIT_SUCCESS);
+                }
+            }
+            else if (sdlevent.type == SDL_KEYUP)
+            {
+                if ((sdlevent.key.keysym.sym == SDLK_UP) || (sdlevent.key.keysym.sym == SDLK_KP_8))
+                {
+                    controls &= ~KEYBIT_UP;
+                }
+                else if ((sdlevent.key.keysym.sym == SDLK_LEFT) || (sdlevent.key.keysym.sym == SDLK_KP_4))
+                {
+                    controls &= ~KEYBIT_LEFT;
+                }
+                else if ((sdlevent.key.keysym.sym == SDLK_DOWN) || (sdlevent.key.keysym.sym == SDLK_KP_2))
+                {
+                    controls &= ~KEYBIT_DOWN;
+                }
+                else if ((sdlevent.key.keysym.sym == SDLK_RIGHT) || (sdlevent.key.keysym.sym == SDLK_KP_6))
+                {
+                    controls &= ~KEYBIT_RIGHT;
+                }
+                else if (sdlevent.key.keysym.sym == SDLK_g)
+                {
+                    controls &= ~KEYBIT_BUTTON1;
+                }
+                else if (sdlevent.key.keysym.sym == SDLK_h)
+                {
+                    controls &= ~KEYBIT_BUTTON2;
+                }
+            }
+        }
+#endif
 /*        if ((emulator.isRecordingTSV) && ((emulator.is16bit) || (frame % 2))) {
             writeFrameBufferToTSV();
         }*/
@@ -524,7 +735,11 @@ int main(void)
         fclose(emulator.tsvFP);
         emulator.tsvFP = 0;
     }
+#ifdef SDL2LIB
+    SDL_Quit();
+#else
     glfwDestroyWindow(window);
     glfwTerminate();
+#endif
     exit(EXIT_SUCCESS);
 }
