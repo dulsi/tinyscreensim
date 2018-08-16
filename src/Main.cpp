@@ -13,6 +13,7 @@
 #endif
 #include <stdlib.h>
 #include <stdio.h>
+#include <getopt.h>
 #include <TinyScreen.h>
 #include <SPI.h>
 #include <Wire.h>
@@ -102,6 +103,7 @@ typedef struct {
     SDL_Renderer *mainRenderer;
     SDL_Texture *mainTexture;
     SDL_Surface *mainScreen;
+    SDL_Rect *rect;
     int mult;
 #else
     GLuint screenTexture;
@@ -121,7 +123,7 @@ static void writeFrameBufferToTSV() {
 
 static void updateScreen() {
 #ifdef SDL2LIB
-    SDL_UpdateTexture(emulator.mainTexture, NULL, emulator.mainScreen->pixels, emulator.mainScreen->pitch);
+    SDL_UpdateTexture(emulator.mainTexture, emulator.rect, emulator.mainScreen->pixels, emulator.mainScreen->pitch);
     SDL_RenderClear(emulator.mainRenderer);
     SDL_RenderCopy(emulator.mainRenderer, emulator.mainTexture, NULL, NULL);
     SDL_RenderPresent(emulator.mainRenderer);
@@ -581,10 +583,60 @@ static void key_callback(GLFWwindow* window, int key, int /*scancode*/, int acti
 }
 #endif
 
-int main(void)
+int main(int argc, char *argv[])
 {
+    bool full = false;
+    bool softRender = false;
+    int opt;
+    static struct option long_options[] =
+    {
+        {"multiplier", 1, 0, 'u'},
+        {0, 0, 0, 0}
+    };
 #ifdef SDL2LIB
+    int screenX, screenY;
     emulator.mult = 4;
+    emulator.rect = NULL;
+    screenX = SCREEN_X * emulator.mult;
+    screenY = SCREEN_Y * emulator.mult;
+#endif
+    while ((opt = getopt_long(argc,argv,"pu:fw", long_options, NULL)) != -1)
+    {
+        switch (opt)
+        {
+#ifdef SDL2LIB
+            case 'p':
+                emulator.rect = new SDL_Rect;
+                emulator.rect->x = 48;
+                emulator.rect->y = 8;
+                emulator.rect->w = 384;
+                emulator.rect->h = 256;
+                emulator.mult = 4;
+                softRender = true;
+                screenX = 480;
+                screenY = 272;
+                full = true;
+                break;
+            case 'u':
+                if (optarg)
+                {
+                    emulator.mult = atol(optarg);
+                    screenX = SCREEN_X * emulator.mult;
+                    screenY = SCREEN_Y * emulator.mult;
+                }
+                break;
+#endif
+            case 'f':
+                full = true;
+                break;
+            case 'w':
+                softRender = true;
+                break;
+            default:
+                break;
+        }
+    }
+#ifdef SDL2LIB
     if (SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO) < 0)
     {
         printf("Failed - SDL_Init\n");
@@ -594,9 +646,9 @@ int main(void)
     window = SDL_CreateWindow("TinyScreen Simulator",
                               SDL_WINDOWPOS_UNDEFINED,
                               SDL_WINDOWPOS_UNDEFINED,
-                              SCREEN_X * emulator.mult,
-                              SCREEN_Y * emulator.mult,
-                              /*(fullScreen ? SDL_WINDOW_FULLSCREEN_DESKTOP : */0/*)*/);
+                              screenX,
+                              screenY,
+                              (full ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0));
     emulator.window = window;
     if (window == NULL)
     {
@@ -604,7 +656,7 @@ int main(void)
         exit(0);
     }
 
-    emulator.mainRenderer = SDL_CreateRenderer(emulator.window, -1, /*(softRenderer ? SDL_RENDERER_SOFTWARE : */0/*)*/);
+    emulator.mainRenderer = SDL_CreateRenderer(emulator.window, -1, (softRender ? SDL_RENDERER_SOFTWARE : 0));
     if (emulator.mainRenderer == NULL)
     {
         printf("Failed - SDL_CreateRenderer\n");
@@ -613,8 +665,8 @@ int main(void)
     emulator.mainTexture = SDL_CreateTexture(emulator.mainRenderer,
                                 SDL_PIXELFORMAT_ARGB8888,
                                 SDL_TEXTUREACCESS_STREAMING,
-                                SCREEN_X * emulator.mult,
-                                SCREEN_Y * emulator.mult);
+                                screenX,
+                                screenY);
     if (emulator.mainTexture == NULL)
     {
         printf("Failed - SDL_CreateTexture\n");

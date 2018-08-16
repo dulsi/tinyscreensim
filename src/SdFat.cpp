@@ -28,7 +28,7 @@ bool SdFat::begin(uint8_t csPin, uint8_t divisor)
  {
   if (!boost::filesystem::create_directory(savePath))
   {
-   fprintf(stderr, "Error creating directory %s\n", savePath);
+   fprintf(stderr, "Error creating directory %s\n", savePath.c_str());
    exit(2);
   }
  }
